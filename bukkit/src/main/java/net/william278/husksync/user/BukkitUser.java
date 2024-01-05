@@ -23,7 +23,6 @@ import de.themoep.minedown.adventure.MineDown;
 import dev.triumphteam.gui.builder.gui.StorageBuilder;
 import dev.triumphteam.gui.guis.Gui;
 import dev.triumphteam.gui.guis.StorageGui;
-import net.kyori.adventure.audience.Audience;
 import net.roxeez.advancement.display.FrameType;
 import net.william278.andjam.Toast;
 import net.william278.husksync.BukkitHuskSync;
@@ -40,6 +39,8 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Arrays;
 import java.util.function.Consumer;
 import java.util.logging.Level;
+
+import static net.william278.husksync.util.BukkitKeyedAdapter.matchMaterial;
 
 /**
  * Bukkit platform implementation of an {@link OnlineUser}
@@ -77,17 +78,11 @@ public class BukkitUser extends OnlineUser implements BukkitUserDataHolder {
         return player == null || !player.isOnline();
     }
 
-    @NotNull
-    @Override
-    public Audience getAudience() {
-        return ((BukkitHuskSync) plugin).getAudiences().player(player);
-    }
-
     @Override
     public void sendToast(@NotNull MineDown title, @NotNull MineDown description,
                           @NotNull String iconMaterial, @NotNull String backgroundType) {
         try {
-            final Material material = Material.matchMaterial(iconMaterial);
+            final Material material = matchMaterial(iconMaterial);
             Toast.builder((BukkitHuskSync) plugin)
                     .setTitle(title.toComponent())
                     .setDescription(description.toComponent())
