@@ -29,9 +29,6 @@ import net.william278.desertwell.util.UpdateChecker;
 import net.william278.desertwell.util.Version;
 import net.william278.husksync.adapter.DataAdapter;
 import net.william278.husksync.config.ConfigProvider;
-import net.william278.husksync.config.Locales;
-import net.william278.husksync.config.Server;
-import net.william278.husksync.config.Settings;
 import net.william278.husksync.data.Data;
 import net.william278.husksync.data.Identifier;
 import net.william278.husksync.data.Serializer;
@@ -179,31 +176,6 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
         }
         log(Level.INFO, "Successfully initialized " + name);
     }
-
-    /**
-     * Returns the plugin {@link Settings}
-     *
-     * @return the {@link Settings}
-     */
-    @NotNull
-    Settings getSettings();
-
-    void setSettings(@NotNull Settings settings);
-
-    @NotNull
-    String getServerName();
-
-    void setServerName(@NotNull Server serverName);
-
-    /**
-     * Returns the plugin {@link Locales}
-     *
-     * @return the {@link Locales}
-     */
-    @NotNull
-    Locales getLocales();
-
-    void setLocales(@NotNull Locales locales);
 
     /**
      * Returns if a dependency is loaded
@@ -378,12 +350,12 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
         private static final String FORMAT = """
                 HuskSync has failed to load! The plugin will not be enabled and no data will be synchronized.
                 Please make sure the plugin has been setup correctly (https://william278.net/docs/husksync/setup):
-                                
-                1) Make sure you've entered your MySQL or MariaDB database details correctly in config.yml
+                
+                1) Make sure you've entered your MySQL, MariaDB or MongoDB database details correctly in config.yml
                 2) Make sure your Redis server details are also correct in config.yml
                 3) Make sure your config is up-to-date (https://william278.net/docs/husksync/config-file)
                 4) Check the error below for more details
-                                
+                
                 Caused by: %s""";
 
         FailedToLoadException(@NotNull String message, @NotNull Throwable cause) {

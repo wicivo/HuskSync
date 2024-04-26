@@ -60,7 +60,7 @@ public interface UserDataHolder extends DataHolder {
      */
     @Override
     default void setData(@NotNull Identifier identifier, @NotNull Data data) {
-        getPlugin().runSync(() -> data.apply(this, getPlugin()));
+        getPlugin().runSync(() -> data.apply(this, getPlugin()), this);
     }
 
     /**
@@ -97,6 +97,7 @@ public interface UserDataHolder extends DataHolder {
             unpacked = snapshot.unpack(plugin);
         } catch (Throwable e) {
             plugin.log(Level.SEVERE, String.format("Failed to unpack data snapshot for %s", getUsername()), e);
+            runAfter.accept(false);
             return;
         }
 
@@ -118,7 +119,7 @@ public interface UserDataHolder extends DataHolder {
                 return;
             }
             plugin.runAsync(() -> runAfter.accept(true));
-        });
+        }, this);
     }
 
     @Override
@@ -169,6 +170,11 @@ public interface UserDataHolder extends DataHolder {
     @Override
     default void setGameMode(@NotNull Data.GameMode gameMode) {
         this.setData(Identifier.GAME_MODE, gameMode);
+    }
+
+    @Override
+    default void setFlightStatus(@NotNull Data.FlightStatus flightStatus) {
+        this.setData(Identifier.FLIGHT_STATUS, flightStatus);
     }
 
     @Override
