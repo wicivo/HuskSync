@@ -3,6 +3,7 @@ import org.apache.tools.ant.filters.ReplaceTokens
 plugins {
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'org.cadixdev.licenser' version '0.6.1' apply false
+    id 'fabric-loom' version '1.7-SNAPSHOT' apply false
     id 'org.ajoberstar.grgit' version '5.2.2'
     id 'maven-publish'
     id 'java'
@@ -69,6 +70,8 @@ allprojects {
     repositories {
         mavenLocal()
         mavenCentral()
+        maven { url 'https://repo.william278.net/releases/' }
+        maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
         maven { url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
         maven { url "https://repo.dmulloy2.net/repository/public/" }
         maven { url 'https://repo.codemc.io/repository/maven-public/' }
@@ -77,7 +80,6 @@ allprojects {
         maven { url 'https://jitpack.io' }
         maven { url 'https://mvn-repo.arim.space/lesser-gpl3/' }
         maven { url 'https://libraries.minecraft.net/' }
-        maven { url 'https://repo.william278.net/releases/' }
     }
 
     dependencies {
@@ -105,6 +107,10 @@ allprojects {
 }
 
 subprojects {
+    if (['fabric'].contains(project.name)) {
+        apply plugin: 'fabric-loom'
+    }
+
     version rootProject.version
     archivesBaseName = "${rootProject.name}-${project.name.capitalize()}"
 
@@ -117,8 +123,13 @@ subprojects {
         archiveClassifier.set('')
     }
 
+    // Append the Minecraft to the version for Fabric projects
+    if (project.name == 'fabric') {
+        version += "+mc.${fabric_minecraft_version}"
+    }
+
     // API publishing
-    if (['common', 'bukkit'].contains(project.name)) {
+    if (['common', 'bukkit', 'fabric'].contains(project.name)) {
         java {
             withSourcesJar()
             withJavadocJar()
@@ -157,6 +168,19 @@ subprojects {
                     }
                 }
             }
+
+            if (['fabric'].contains(project.name)) {
+                publications {
+                    mavenJavaFabric(MavenPublication) {
+                        groupId = 'net.william278.husksync'
+                        artifactId = 'husksync-fabric'
+                        version = "$rootProject.version+${fabric_minecraft_version}"
+                        artifact remapJar
+                        artifact sourcesJar
+                        artifact javadocJar
+                    }
+                }
+            }
         }
     }
 
@@ -168,11 +192,20 @@ logger.lifecycle("Building HuskSync ${version} by William278")
 
 @SuppressWarnings('GrMethodMayBeStatic')
 def versionMetadata() {
-    // Get the last commit hash and if it's a clean head
+    // Require grgit
     if (grgit == null) {
-        return '-' + System.getenv("GITHUB_RUN_NUMBER") ? 'build.' + System.getenv("GITHUB_RUN_NUMBER") : 'unknown'
+        return '-unknown'
     }
-    // If grgit DOES exist, get tag for this commit
+
+    // If unclean, return the last commit hash with -indev
+    if (!grgit.status().clean) {
+        return '-' + grgit.head().abbreviatedId  + '-indev'
+    }
+
+    // Otherwise if this matches a tag, return nothing
     def tag = grgit.tag.list().find { it.commit.id == grgit.head().id }
-    return '-' + grgit.head().abbreviatedId + (grgit.status().clean ? '' : '-indev')
+    if (tag != null) {
+        return ''
+    }
+    return '-' + grgit.head().abbreviatedId
 }

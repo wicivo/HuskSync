@@ -21,20 +21,29 @@ package net.william278.husksync.data;
 
 import com.google.gson.reflect.TypeToken;
 import de.tr7zw.changeme.nbtapi.NBT;
+import de.tr7zw.changeme.nbtapi.NBTCompound;
 import de.tr7zw.changeme.nbtapi.NBTContainer;
 import de.tr7zw.changeme.nbtapi.iface.ReadWriteNBT;
+import de.tr7zw.changeme.nbtapi.iface.ReadWriteNBTCompoundList;
+import de.tr7zw.changeme.nbtapi.utils.DataFixerUtil;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import net.william278.desertwell.util.Version;
+import net.william278.husksync.BukkitHuskSync;
 import net.william278.husksync.HuskSync;
 import net.william278.husksync.adapter.Adaptable;
 import net.william278.husksync.api.HuskSyncAPI;
+import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
 import static net.william278.husksync.data.BukkitData.Items.Inventory.INVENTORY_SLOT_COUNT;
+import static net.william278.husksync.data.Data.Items.Inventory.HELD_ITEM_SLOT_TAG;
+import static net.william278.husksync.data.Data.Items.Inventory.ITEMS_TAG;
 
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class BukkitSerializer {
@@ -52,23 +61,27 @@ public class BukkitSerializer {
         return plugin;
     }
 
-    public static class Inventory extends BukkitSerializer implements Serializer<BukkitData.Items.Inventory> {
-        private static final String ITEMS_TAG = "items";
-        private static final String HELD_ITEM_SLOT_TAG = "held_item_slot";
+    public static class Inventory extends BukkitSerializer implements Serializer<BukkitData.Items.Inventory>,
+            ItemDeserializer {
 
         public Inventory(@NotNull HuskSync plugin) {
             super(plugin);
         }
 
         @Override
-        public BukkitData.Items.Inventory deserialize(@NotNull String serialized) throws DeserializationException {
+        public BukkitData.Items.Inventory deserialize(@NotNull String serialized, @NotNull Version dataMcVersion)
+                throws DeserializationException {
             final ReadWriteNBT root = NBT.parseNBT(serialized);
-            final ItemStack[] items = root.getItemStackArray(ITEMS_TAG);
-            final int heldItemSlot = root.getInteger(HELD_ITEM_SLOT_TAG);
+            final ReadWriteNBT items = root.hasTag(ITEMS_TAG) ? root.getCompound(ITEMS_TAG) : null;
             return BukkitData.Items.Inventory.from(
-                    items == null ? new ItemStack[INVENTORY_SLOT_COUNT] : items,
-                    heldItemSlot
+                    items != null ? getItems(items, dataMcVersion) : new ItemStack[INVENTORY_SLOT_COUNT],
+                    root.hasTag(HELD_ITEM_SLOT_TAG) ? root.getInteger(HELD_ITEM_SLOT_TAG) : 0
             );
+        }
+
+        @Override
+        public BukkitData.Items.Inventory deserialize(@NotNull String serialized) {
+            return deserialize(serialized, plugin.getMinecraftVersion());
         }
 
         @NotNull
@@ -82,16 +95,23 @@ public class BukkitSerializer {
 
     }
 
-    public static class EnderChest extends BukkitSerializer implements Serializer<BukkitData.Items.EnderChest> {
+    public static class EnderChest extends BukkitSerializer implements Serializer<BukkitData.Items.EnderChest>,
+            ItemDeserializer {
 
         public EnderChest(@NotNull HuskSync plugin) {
             super(plugin);
         }
 
         @Override
-        public BukkitData.Items.EnderChest deserialize(@NotNull String serialized) throws DeserializationException {
-            final ItemStack[] items = NBT.itemStackArrayFromNBT(NBT.parseNBT(serialized));
+        public BukkitData.Items.EnderChest deserialize(@NotNull String serialized, @NotNull Version dataMcVersion)
+                throws DeserializationException {
+            final ItemStack[] items = getItems(NBT.parseNBT(serialized), dataMcVersion);
             return items == null ? BukkitData.Items.EnderChest.empty() : BukkitData.Items.EnderChest.adapt(items);
+        }
+
+        @Override
+        public BukkitData.Items.EnderChest deserialize(@NotNull String serialized) {
+            return deserialize(serialized, plugin.getMinecraftVersion());
         }
 
         @NotNull
@@ -99,6 +119,59 @@ public class BukkitSerializer {
         public String serialize(@NotNull BukkitData.Items.EnderChest data) throws SerializationException {
             return NBT.itemStackArrayToNBT(data.getContents()).toString();
         }
+    }
+
+    // Utility interface for deserializing and upgrading item stacks from legacy versions
+    private interface ItemDeserializer {
+
+        @Nullable
+        default ItemStack[] getItems(@NotNull ReadWriteNBT tag, @NotNull Version mcVersion) {
+            if (mcVersion.compareTo(getPlugin().getMinecraftVersion()) < 0) {
+                return upgradeItemStacks((NBTCompound) tag, mcVersion);
+            }
+            return NBT.itemStackArrayFromNBT(tag);
+        }
+
+        @NotNull
+        private ItemStack @NotNull [] upgradeItemStacks(@NotNull NBTCompound itemsNbt, @NotNull Version mcVersion) {
+            final ReadWriteNBTCompoundList items = itemsNbt.getCompoundList("items");
+            final ItemStack[] itemStacks = new ItemStack[itemsNbt.getInteger("size")];
+            for (int i = 0; i < items.size(); i++) {
+                if (items.get(i) == null) {
+                    itemStacks[i] = new ItemStack(Material.AIR);
+                    continue;
+                }
+                try {
+                    itemStacks[i] = NBT.itemStackFromNBT(upgradeItemData(items.get(i), mcVersion));
+                } catch (Throwable e) {
+                    itemStacks[i] = new ItemStack(Material.AIR);
+                }
+            }
+            return itemStacks;
+        }
+
+        @NotNull
+        private ReadWriteNBT upgradeItemData(@NotNull ReadWriteNBT tag, @NotNull Version mcVersion)
+                throws NoSuchFieldException, IllegalAccessException {
+            return DataFixerUtil.fixUpItemData(tag, getDataVersion(mcVersion), DataFixerUtil.getCurrentVersion());
+        }
+
+        private int getDataVersion(@NotNull Version mcVersion) {
+            return switch (mcVersion.toStringWithoutMetadata()) {
+                case "1.16", "1.16.1", "1.16.2", "1.16.3", "1.16.4", "1.16.5" -> DataFixerUtil.VERSION1_16_5;
+                case "1.17", "1.17.1" -> DataFixerUtil.VERSION1_17_1;
+                case "1.18", "1.18.1", "1.18.2" -> DataFixerUtil.VERSION1_18_2;
+                case "1.19", "1.19.1", "1.19.2" -> DataFixerUtil.VERSION1_19_2;
+                case "1.20", "1.20.1", "1.20.2" -> DataFixerUtil.VERSION1_20_2;
+                case "1.20.3", "1.20.4" -> DataFixerUtil.VERSION1_20_4;
+                case "1.20.5", "1.20.6" -> DataFixerUtil.VERSION1_20_5;
+                case "1.21" -> DataFixerUtil.VERSION1_21;
+                default -> DataFixerUtil.getCurrentVersion();
+            };
+        }
+
+        @NotNull
+        HuskSync getPlugin();
     }
 
     public static class PotionEffects extends BukkitSerializer implements Serializer<BukkitData.PotionEffects> {
@@ -167,24 +240,19 @@ public class BukkitSerializer {
 
     }
 
-    public static class Json<T extends Data & Adaptable> extends BukkitSerializer implements Serializer<T> {
+    /**
+     * @deprecated Use {@link Serializer.Json} in the common module instead
+     */
+    @Deprecated(since = "2.6")
+    public class Json<T extends Data & Adaptable> extends Serializer.Json<T> {
 
-        private final Class<T> type;
-
-        public Json(@NotNull HuskSync plugin, Class<T> type) {
-            super(plugin);
-            this.type = type;
-        }
-
-        @Override
-        public T deserialize(@NotNull String serialized) throws DeserializationException {
-            return plugin.getDataAdapter().fromJson(serialized, type);
+        public Json(@NotNull HuskSync plugin, @NotNull Class<T> type) {
+            super(plugin, type);
         }
 
         @NotNull
-        @Override
-        public String serialize(@NotNull T element) throws SerializationException {
-            return plugin.getDataAdapter().toJson(element);
+        public BukkitHuskSync getPlugin() {
+            return (BukkitHuskSync) plugin;
         }
 
     }

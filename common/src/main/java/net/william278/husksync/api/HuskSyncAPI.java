@@ -379,6 +379,17 @@ public class HuskSyncAPI {
     }
 
     /**
+     * Get a registered data serializer by its identifier
+     *
+     * @param identifier The identifier of the data type to get the serializer for
+     * @return The serializer for the given identifier, or an empty optional if the serializer isn't registered
+     * @since 3.5.4
+     */
+    public Optional<Serializer<Data>> getDataSerializer(@NotNull Identifier identifier) {
+        return plugin.getSerializer(identifier);
+    }
+
+    /**
      * Get a {@link DataSnapshot.Unpacked} from a {@link DataSnapshot.Packed}
      *
      * @param unpacked The unpacked snapshot
@@ -500,17 +511,19 @@ public class HuskSyncAPI {
      */
     static final class NotRegisteredException extends IllegalStateException {
 
-        private static final String MESSAGE = """
-                Could not access the HuskSync API as it has not yet been registered. This could be because:
+        private static final String REASONS = """
+                This may be because:
                 1) HuskSync has failed to enable successfully
                 2) Your plugin isn't set to load after HuskSync has
                    (Check if it set as a (soft)depend in plugin.yml or to load: BEFORE in paper-plugin.yml?)
-                3) You are attempting to access HuskSync on plugin construction/before your plugin has enabled.
-                4) You have shaded HuskSync into your plugin jar and need to fix your maven/gradle/build script
-                   to only include HuskSync as a dependency and not as a shaded dependency.""";
+                3) You are attempting to access HuskSync on plugin construction/before your plugin has enabled.""";
+
+        NotRegisteredException(@NotNull String reasons) {
+            super("Could not access the HuskSync API as it has not yet been registered. %s".formatted(reasons));
+        }
 
         NotRegisteredException() {
-            super(MESSAGE);
+            this(REASONS);
         }
 
     }

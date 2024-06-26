@@ -28,13 +28,13 @@ check_for_updates: true
 cluster_id: ''
 # Enable development debug logging
 debug_logging: true
-# Whether to provide modern, rich TAB suggestions for commands (if available)
-brigadier_tab_completion: false
 # Whether to enable the Player Analytics hook.
 # Docs: https://william278.net/docs/husksync/plan-hook
 enable_plan_hook: true
-# Whether to cancel game event packets directly when handling locked players if ProtocolLib is installed
+# Whether to cancel game event packets directly when handling locked players if ProtocolLib or PacketEvents is installed
 cancel_packets: true
+# Add HuskSync commands to this list to prevent them from being registered (e.g. ['userdata'])
+disabled_commands: []
 # Database settings
 database:
   # Type of database to use (MYSQL, MARIADB, POSTGRES, MONGO)
@@ -78,7 +78,7 @@ redis:
     # List of host:port pairs
     nodes: []
     password: ''
-# Redis settings
+# Data syncing settings
 synchronization:
   # The data synchronization mode to use (LOCKSTEP or DELAY). LOCKSTEP is recommended for most networks.
   # Docs: https://william278.net/docs/husksync/sync-modes

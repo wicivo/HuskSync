@@ -19,26 +19,55 @@
 
 package net.william278.husksync.data;
 
+import net.william278.desertwell.util.Version;
+import net.william278.husksync.HuskSync;
+import net.william278.husksync.adapter.Adaptable;
 import org.jetbrains.annotations.NotNull;
 
 public interface Serializer<T extends Data> {
 
-    T deserialize(@NotNull String serialized) throws DeserializationException;
+    T deserialize(@NotNull String serialized);
+
+    default T deserialize(@NotNull String serialized, @NotNull Version dataMcVersion) throws DeserializationException {
+        return deserialize(serialized);
+    }
 
     @NotNull
     String serialize(@NotNull T element) throws SerializationException;
 
-    static final class DeserializationException extends IllegalStateException {
+    final class DeserializationException extends IllegalStateException {
         DeserializationException(@NotNull String message, @NotNull Throwable cause) {
             super(message, cause);
         }
     }
 
-    static final class SerializationException extends IllegalStateException {
+    final class SerializationException extends IllegalStateException {
         SerializationException(@NotNull String message, @NotNull Throwable cause) {
             super(message, cause);
         }
     }
 
 
+    class Json<T extends Data & Adaptable> implements Serializer<T> {
+
+        private final HuskSync plugin;
+        private final Class<T> type;
+
+        public Json(@NotNull HuskSync plugin, @NotNull Class<T> type) {
+            this.type = type;
+            this.plugin = plugin;
+        }
+
+        @Override
+        public T deserialize(@NotNull String serialized) throws DeserializationException {
+            return plugin.getDataAdapter().fromJson(serialized, type);
+        }
+
+        @NotNull
+        @Override
+        public String serialize(@NotNull T element) throws SerializationException {
+            return plugin.getDataAdapter().toJson(element);
+        }
+
+    }
 }

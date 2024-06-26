@@ -31,7 +31,7 @@ import net.william278.husksync.adapter.DataAdapter;
 import net.william278.husksync.config.ConfigProvider;
 import net.william278.husksync.data.Data;
 import net.william278.husksync.data.Identifier;
-import net.william278.husksync.data.Serializer;
+import net.william278.husksync.data.SerializerRegistry;
 import net.william278.husksync.database.Database;
 import net.william278.husksync.event.EventDispatcher;
 import net.william278.husksync.migrator.Migrator;
@@ -41,9 +41,9 @@ import net.william278.husksync.user.ConsoleUser;
 import net.william278.husksync.user.OnlineUser;
 import net.william278.husksync.util.LegacyConverter;
 import net.william278.husksync.util.Task;
+import net.william278.uniform.Uniform;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -52,7 +52,7 @@ import java.util.logging.Level;
 /**
  * Abstract implementation of the HuskSync plugin.
  */
-public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider {
+public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider, SerializerRegistry {
 
     int SPIGOT_RESOURCE_ID = 97144;
 
@@ -86,7 +86,6 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
      *
      * @return the {@link RedisManager} implementation
      */
-
     @NotNull
     RedisManager getRedisManager();
 
@@ -97,43 +96,6 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
      */
     @NotNull
     DataAdapter getDataAdapter();
-
-    /**
-     * Returns the data serializer for the given {@link Identifier}
-     */
-    @NotNull
-    <T extends Data> Map<Identifier, Serializer<T>> getSerializers();
-
-    /**
-     * Register a data serializer for the given {@link Identifier}
-     *
-     * @param identifier the {@link Identifier}
-     * @param serializer the {@link Serializer}
-     */
-    default void registerSerializer(@NotNull Identifier identifier,
-                                    @NotNull Serializer<? extends Data> serializer) {
-        if (identifier.isCustom()) {
-            log(Level.INFO, String.format("Registered custom data type: %s", identifier));
-        }
-        getSerializers().put(identifier, (Serializer<Data>) serializer);
-    }
-
-    /**
-     * Get the {@link Identifier} for the given key
-     */
-    default Optional<Identifier> getIdentifier(@NotNull String key) {
-        return getSerializers().keySet().stream().filter(identifier -> identifier.toString().equals(key)).findFirst();
-    }
-
-    /**
-     * Get the set of registered data types
-     *
-     * @return the set of registered data types
-     */
-    @NotNull
-    default Set<Identifier> getRegisteredDataTypes() {
-        return getSerializers().keySet();
-    }
 
     /**
      * Returns the data syncer implementation
@@ -151,6 +113,14 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
     void setDataSyncer(@NotNull DataSyncer dataSyncer);
 
     /**
+     * Get the uniform command provider
+     *
+     * @return the command provider
+     */
+    @NotNull
+    Uniform getUniform();
+
+    /**
      * Returns a list of available data {@link Migrator}s
      *
      * @return a list of {@link Migrator}s
@@ -159,7 +129,17 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
     List<Migrator> getAvailableMigrators();
 
     @NotNull
-    Map<Identifier, Data> getPlayerCustomDataStore(@NotNull OnlineUser user);
+    Map<UUID, Map<Identifier, Data>> getPlayerCustomDataStore();
+
+    @NotNull
+    default Map<Identifier, Data> getPlayerCustomDataStore(@NotNull OnlineUser user) {
+        if (getPlayerCustomDataStore().containsKey(user.getUuid())) {
+            return getPlayerCustomDataStore().get(user.getUuid());
+        }
+        final Map<Identifier, Data> data = new HashMap<>();
+        getPlayerCustomDataStore().put(user.getUuid(), data);
+        return data;
+    }
 
     /**
      * Initialize a faucet of the plugin.
@@ -192,14 +172,6 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
      * @return the {@link InputStream} of the resource
      */
     InputStream getResource(@NotNull String name);
-
-    /**
-     * Returns the plugin data folder
-     *
-     * @return the plugin data folder as a {@link File}
-     */
-    @NotNull
-    File getDataFolder();
 
     /**
      * Log a message to the console
@@ -293,10 +265,10 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
     @NotNull
     default UpdateChecker getUpdateChecker() {
         return UpdateChecker.builder()
-                .currentVersion(getPluginVersion())
-                .endpoint(UpdateChecker.Endpoint.SPIGOT)
-                .resource(Integer.toString(SPIGOT_RESOURCE_ID))
-                .build();
+            .currentVersion(getPluginVersion())
+            .endpoint(UpdateChecker.Endpoint.SPIGOT)
+            .resource(Integer.toString(SPIGOT_RESOURCE_ID))
+            .build();
     }
 
     default void checkForUpdates() {
@@ -304,8 +276,8 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
             getUpdateChecker().check().thenAccept(checked -> {
                 if (!checked.isUpToDate()) {
                     log(Level.WARNING, String.format(
-                            "A new version of HuskSync is available: v%s (running v%s)",
-                            checked.getLatestVersion(), getPluginVersion())
+                        "A new version of HuskSync is available: v%s (running v%s)",
+                        checked.getLatestVersion(), getPluginVersion())
                     );
                 }
             });
@@ -348,15 +320,15 @@ public interface HuskSync extends Task.Supplier, EventDispatcher, ConfigProvider
     final class FailedToLoadException extends IllegalStateException {
 
         private static final String FORMAT = """
-                HuskSync has failed to load! The plugin will not be enabled and no data will be synchronized.
-                Please make sure the plugin has been setup correctly (https://william278.net/docs/husksync/setup):
-                
-                1) Make sure you've entered your MySQL, MariaDB or MongoDB database details correctly in config.yml
-                2) Make sure your Redis server details are also correct in config.yml
-                3) Make sure your config is up-to-date (https://william278.net/docs/husksync/config-file)
-                4) Check the error below for more details
-                
-                Caused by: %s""";
+            HuskSync has failed to load! The plugin will not be enabled and no data will be synchronized.
+            Please make sure the plugin has been setup correctly (https://william278.net/docs/husksync/setup):
+                            
+            1) Make sure you've entered your MySQL, MariaDB or MongoDB database details correctly in config.yml
+            2) Make sure your Redis server details are also correct in config.yml
+            3) Make sure your config is up-to-date (https://william278.net/docs/husksync/config-file)
+            4) Check the error below for more details
+                            
+            Caused by: %s""";
 
         FailedToLoadException(@NotNull String message, @NotNull Throwable cause) {
             super(String.format(FORMAT, message), cause);

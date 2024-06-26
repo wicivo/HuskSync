@@ -21,6 +21,11 @@ package net.william278.husksync.data;
 
 import com.google.common.collect.Sets;
 import com.google.gson.annotations.SerializedName;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 import net.kyori.adventure.key.Key;
 import net.william278.husksync.HuskSync;
 import net.william278.husksync.user.OnlineUser;
@@ -78,6 +83,7 @@ public interface Data {
          */
         interface Inventory extends Items {
 
+            int INVENTORY_SLOT_COUNT = 41;
             String ITEMS_TAG = "items";
             String HELD_ITEM_SLOT_TAG = "held_item_slot";
 
@@ -110,7 +116,7 @@ public interface Data {
          * Data container holding data for ender chests
          */
         interface EnderChest extends Items {
-
+            int ENDER_CHEST_SLOT_COUNT = 27;
         }
 
     }
@@ -149,14 +155,14 @@ public interface Data {
      */
     interface Advancements extends Data {
 
+        String RECIPE_ADVANCEMENT = "minecraft:recipe";
+
         @NotNull
         List<Advancement> getCompleted();
 
         @NotNull
         default List<Advancement> getCompletedExcludingRecipes() {
-            return getCompleted().stream()
-                    .filter(advancement -> !advancement.getKey().startsWith("minecraft:recipe"))
-                    .collect(Collectors.toList());
+            return getCompleted().stream().filter(adv -> !adv.getKey().startsWith(RECIPE_ADVANCEMENT)).toList();
         }
 
         void setCompleted(@NotNull List<Advancement> completed);
@@ -333,17 +339,34 @@ public interface Data {
 
         }
 
-        record Modifier(
-                @NotNull UUID uuid,
-                @NotNull String name,
-                double amount,
-                @SerializedName("operation") int operationType,
-                @SerializedName("equipment_slot") int equipmentSlot
-        ) {
+        @Getter
+        @Accessors(fluent = true)
+        @AllArgsConstructor
+        @NoArgsConstructor
+        final class Modifier {
+            @Getter(AccessLevel.NONE)
+            @Nullable
+            @SerializedName("uuid")
+            private UUID uuid;
+            @SerializedName("name")
+            private String name;
+            @SerializedName("amount")
+            private double amount;
+            @SerializedName("operation")
+            private int operationType;
+            @SerializedName("equipment_slot")
+            private int equipmentSlot;
+
+            public Modifier(@NotNull String name, double amount, int operationType, int equipmentSlot) {
+                this.name = name;
+                this.amount = amount;
+                this.operationType = operationType;
+                this.equipmentSlot = equipmentSlot;
+            }
 
             @Override
             public boolean equals(Object obj) {
-                return obj instanceof Modifier modifier && modifier.uuid.equals(uuid);
+                return obj instanceof Modifier modifier && modifier.uuid().equals(uuid());
             }
 
             public double modify(double value) {
@@ -354,6 +377,12 @@ public interface Data {
                     default -> value;
                 };
             }
+
+            @NotNull
+            public UUID uuid() {
+                return uuid != null ? uuid : UUID.nameUUIDFromBytes(name.getBytes());
+            }
+
         }
 
         default Optional<Attribute> getAttribute(@NotNull Key key) {

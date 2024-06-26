@@ -19,38 +19,44 @@
 
 package net.william278.husksync.util;
 
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
-import org.bukkit.Statistic;
+import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.EntityType;
+import org.bukkit.potion.PotionEffectType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.Objects;
 
 // Utility class for adapting "Keyed" Bukkit objects
 public final class BukkitKeyedAdapter {
 
     @Nullable
     public static Statistic matchStatistic(@NotNull String key) {
-        return Registry.STATISTIC.get(Objects.requireNonNull(NamespacedKey.fromString(key), "Null key"));
+        return getRegistryValue(Registry.STATISTIC, key);
     }
 
     @Nullable
     public static EntityType matchEntityType(@NotNull String key) {
-        return Registry.ENTITY_TYPE.get(Objects.requireNonNull(NamespacedKey.fromString(key), "Null key"));
+        return getRegistryValue(Registry.ENTITY_TYPE, key);
     }
 
     @Nullable
     public static Material matchMaterial(@NotNull String key) {
-        return Registry.MATERIAL.get(Objects.requireNonNull(NamespacedKey.fromString(key), "Null key"));
+        return getRegistryValue(Registry.MATERIAL, key);
     }
 
     @Nullable
     public static Attribute matchAttribute(@NotNull String key) {
-        return Registry.ATTRIBUTE.get(Objects.requireNonNull(NamespacedKey.fromString(key), "Null key"));
+        return getRegistryValue(Registry.ATTRIBUTE, key);
+    }
+
+    @Nullable
+    public static PotionEffectType matchEffectType(@NotNull String key) {
+        return PotionEffectType.getByName(key); // No registry for this in 1.17 API
+    }
+
+    private static <T extends Keyed> T getRegistryValue(@NotNull Registry<T> registry, @NotNull String keyString) {
+        final NamespacedKey key = NamespacedKey.fromString(keyString);
+        return key != null ? registry.get(key) : null;
     }
 
 }

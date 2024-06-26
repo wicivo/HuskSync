@@ -17,13 +17,23 @@
  *  limitations under the License.
  */
 
-package net.william278.husksync.command;
+package net.william278.husksync.event;
 
-import net.william278.husksync.user.CommandUser;
+import net.fabricmc.fabric.api.event.Event;
+import net.fabricmc.fabric.api.event.EventFactory;
+import net.minecraft.server.world.ServerWorld;
 import org.jetbrains.annotations.NotNull;
 
-public interface Executable {
+import java.util.Arrays;
 
-    void onExecuted(@NotNull CommandUser executor, @NotNull String[] args);
+public interface WorldSaveCallback {
+
+    @NotNull
+    Event<WorldSaveCallback> EVENT = EventFactory.createArrayBacked(
+            WorldSaveCallback.class,
+            (listeners) -> (world) -> Arrays.stream(listeners).forEach(listener -> listener.save(world))
+    );
+
+    void save(@NotNull ServerWorld world);
 
 }
